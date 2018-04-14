@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import javax.annotation.Resource;
 
+import org.aalku.plantMonitor.manager.repository.ConfigRepository;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.boot.SpringApplication;
@@ -23,6 +24,9 @@ public class PlantMonitorManager {
 
 	@Resource
 	PortManager port;
+	
+	@Resource
+	ConfigRepository config;
 
 	@RequestMapping("/")
 	@ResponseBody
