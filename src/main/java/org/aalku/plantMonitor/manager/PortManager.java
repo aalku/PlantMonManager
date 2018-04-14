@@ -24,7 +24,7 @@ class PortManager extends Thread implements Closeable {
 
 	private static final int TIMEOUT_RX_HELLO_SECONDS = 10;
 
-	private final Logger log = LogManager.getLogger(PlantMonitorManager.class);
+	private final Logger log = LogManager.getLogger(PortManager.class);
 
 	private final StringBuilder partialLine = new StringBuilder();
 
