@@ -2,7 +2,13 @@ package org.aalku.plantMonitor.manager;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 
 import org.apache.logging.log4j.LogManager;
@@ -11,9 +17,12 @@ import org.springframework.stereotype.Component;
 
 import jssc.SerialPort;
 import jssc.SerialPortException;
+import jssc.SerialPortList;
 
 @Component
 class PortManager extends Thread implements Closeable {
+
+	private static final int TIMEOUT_RX_HELLO_SECONDS = 10;
 
 	private final Logger log = LogManager.getLogger(PlantMonitorManager.class);
 
@@ -27,134 +36,188 @@ class PortManager extends Thread implements Closeable {
 	
 	{
 		this.setDaemon(true);
-		this.start();
 	}
+
+	private final AtomicBoolean connected = new AtomicBoolean(false);
+	private final AtomicBoolean connecting = new AtomicBoolean(false);
+
+	private Consumer<String> scanSuccessHandler;
+
+	private boolean allowScan;
 
 	@Override
 	public void run() {
 		while (!this.isInterrupted()) {
 			handleConnect();
 			if (isConnected()) {
-				String read = readLine();
+				String read = readLine(0L, null);
 				if (read != null) {
 					log.info("Received {}", read);
 				}
 			} else {
-				reconnect.set(true);
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-				}
+				delay();
 			}
 		}
 	}
 
-	private String readLine() {
-		try {				
-			String read;
-			while (null != (read = port.readString())) {
-				partialLine.append(read);
-			}
-		} catch (SerialPortException e) {
-			reconnect.set(true);
-			e.printStackTrace();
+	private void delay() {
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
-		
-		IntSupplier findLf = ()->{
-			int ir = partialLine.indexOf("\r");
-			int in = partialLine.indexOf("\n");
-			int i = in;
-			if ((ir >= 0) && (in < 0 || ir < in)) {
-				i = ir;
-			}
-			return i;
-		};
-		
+	}
+
+	private String readLine(long timeout, TimeUnit timeUnit) {
+		if (!isConnected() && !isConnecting()) {
+			return null;
+		}
+		boolean blocking = timeout > 0L;
+		Instant timeoutInstant = blocking ? Instant.now().plus(timeUnit.toNanos(timeout), ChronoUnit.NANOS) : null;
 		String res = null;
-		int i;
-		while (0 <= (i = findLf.getAsInt())) {
-			if (i == 0) {
-				partialLine.deleteCharAt(0);
-			} else {
-				res = partialLine.substring(0, i);
-				partialLine.delete(0, i + 1);
+		while (true) {
+			try {
+				String read;
+				while (null != (read = port.readString())) {
+					partialLine.append(read);
+				}
+			} catch (SerialPortException e) {
+				internalDisconnect();
+				e.printStackTrace();
+			}
+			IntSupplier findLf = ()->{
+				int ir = partialLine.indexOf("\r");
+				int in = partialLine.indexOf("\n");
+				int i = in;
+				if ((ir >= 0) && (in < 0 || ir < in)) {
+					i = ir;
+				}
+				return i;
+			};
+			
+			int i;
+			while (0 <= (i = findLf.getAsInt())) {
+				if (i == 0) {
+					partialLine.deleteCharAt(0);
+				} else {
+					res = partialLine.substring(0, i);
+					partialLine.delete(0, i + 1);
+				}
+			}
+			if (res != null || !blocking || Instant.now().isAfter(timeoutInstant)) {
+				break;
 			}
 		}
 		return res;
 	}
 
+	private boolean isConnecting() {
+		return connecting.get();
+	}
+
 	private void handleConnect() {
-		String _portName = getPortName();
+		Consumer<String> tryPort = (_portName) -> {
+			if (!isConnected()) {
+				reconnect.set(true);
+			}
+			if (_portName != null && reconnect.getAndSet(false)) {
+				internalDisconnect();
+				if (connectRX(_portName)) {
+					this.portName = _portName;
+				}
+			}
+		};
+		if (portName != null && !portName.isEmpty()) {
+			tryPort.accept(portName);
+		}
+		if (allowScan && !isConnected()) {
+			List<String> ports = Arrays.asList(SerialPortList.getPortNames());
+			log.info("Scanning serial ports: {}", ports);
+			for (String port: ports) {
+				tryPort.accept(port);
+				if (isConnected()) {
+					scanSuccessHandler.accept(port);
+					break;
+				}
+			}
+		}
 		if (!isConnected()) {
 			reconnect.set(true);
 		}
-		if (_portName != null && reconnect.getAndSet(false)) {
-			log.info("Connecting to {}", _portName);
-			partialLine.setLength(0);
-			if (port != null) {
-				try {
-					port.closePort();
-					port = null;
-				} catch (SerialPortException e) {
-					e.printStackTrace();
-				}
-			}
-			port = openPort(_portName);
-			if (port != null) {
-				log.info("Connected to {}!", _portName);
-			}
-		}
+
 	}
 
 	private boolean isConnected() {
-		return port != null && port.isOpened();
+		return connected.get() && port != null && port.isOpened();
 	}
 
 	public void close() throws IOException {
 		this.interrupt();
 		try {
-			port.closePort();
-			port = null;
+			connected.set(false);
+			if (port != null) {
+				port.closePort();
+				port = null;
+			}
 		} catch (SerialPortException e) {
 			throw new IOException(e);
 		}
-		
 	}
 	
-	public SerialPort openPort(String portName) {
-		SerialPort port = new SerialPort(portName);		
+	private boolean connectRX(String portName) {
+		log.info("Connecting to RX at {} ...", portName);
+		internalDisconnect();
+		partialLine.setLength(0);
+		port = new SerialPort(portName);		
+		boolean ok = false;
+		connecting.set(true);
 		try {
-			boolean ok = port.openPort();
+			ok = port.openPort();
 			if (ok) {
 				port.setParams(SerialPort.BAUDRATE_115200, SerialPort.DATABITS_8, SerialPort.STOPBITS_1, SerialPort.PARITY_NONE, false, true);
+				ok = waitReceptorHello();
 			}
-			return ok ? port : null;
+			connected.set(ok);
+			if (ok) {
+				log.info("Connected to RX at {} !", portName);
+			}
+			return ok;
 		} catch (SerialPortException e1) {
-			if (port != null) {
-				try {
-					port.closePort();
-				} catch (SerialPortException e) {
-				}
-			}
 			e1.printStackTrace();
+		} finally {
+			if (!isConnected()) {
+				internalDisconnect();
+			}
+			connecting.set(false);
 		}
-		return null;
+		return false;
 	}
 
-	public boolean testPort(String portName) {
-		SerialPort port = openPort(portName);
-		boolean ok = port != null;
-		if (ok) {
+	private void internalDisconnect() {
+		if (port != null) {
 			try {
-				ok = false;
 				port.closePort();
-				ok = true;
+				port = null;
 			} catch (SerialPortException e) {
-				e.printStackTrace();
+			}
+			connected.set(false);
+		}
+	}
+
+	private boolean waitReceptorHello() {
+		long t = TimeUnit.SECONDS.toNanos(TIMEOUT_RX_HELLO_SECONDS);
+		long to = t + System.nanoTime();
+		while (true) {
+			long nanosTimeout = to - System.nanoTime();
+			// log.debug("Waiting for RX at for {} seconds", TimeUnit.NANOSECONDS.toMillis(nanosTimeout)/1000d);
+			String line = readLine(nanosTimeout, TimeUnit.NANOSECONDS);
+			if (line != null && line.endsWith("RX")) {
+				return true;
+			} else if (nanosTimeout <= 0L) {
+				break;
 			}
 		}
-		return ok;
+		return false;
 	}
 
 	public String getPortName() {
@@ -167,6 +230,15 @@ class PortManager extends Thread implements Closeable {
 
 	public void reconnect() {
 		reconnect.set(true);
+	}
+
+	public void setScanSuccessHandler(Consumer<String> handler) {
+		this.scanSuccessHandler = handler;
+	}
+
+	public void setAllowScan(boolean allowScan) {
+		this.allowScan = allowScan;
+		
 	}
 
 }

@@ -23,7 +23,7 @@ import jssc.SerialPortList;
 @SpringBootApplication
 public class PlantMonitorManager implements InitializingBean {
 
-	private Logger log = LogManager.getLogger(PlantMonitorManager.class);
+	private static Logger log = LogManager.getLogger(PlantMonitorManager.class);
 
 	@Resource
 	private PortManager port;
@@ -50,14 +50,10 @@ public class PlantMonitorManager implements InitializingBean {
 	public String connect(@RequestParam("portName") String portName) {
 		try {
 			if (!portName.equals(port.getPortName())) {
-				if (port.testPort(portName)) {
-					port.setPortName(portName);
-					config.setPortName(portName);
-					configRepo.save(config);
-					return "Port changed: " + portName;
-				} else {
-					return "Can't open port: " + portName;
-				}
+				port.setPortName(portName);
+				config.setPortName(portName);
+				configRepo.save(config);
+				return "Port changed: " + portName;
 			} else {
 				return "Reconnecting same port: " + portName;
 			}
@@ -83,6 +79,14 @@ public class PlantMonitorManager implements InitializingBean {
 			this.connect(portName);
 		}
 		configRepo.save(config);
+		
+		port.setPortName(portName);
+		port.setAllowScan(true);
+		port.setScanSuccessHandler((pn) -> {
+			config.setPortName(pn);
+			configRepo.save(config);
+		});
+		port.start();
 	}
 
 }
