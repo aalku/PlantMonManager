@@ -10,4 +10,5 @@ public interface ConfigRepository extends CrudRepository<PersistedConfiguration,
 	
 	@Query("SELECT x FROM PersistedConfiguration x order by x.id desc")
 	Optional<PersistedConfiguration> load();
+
 }
