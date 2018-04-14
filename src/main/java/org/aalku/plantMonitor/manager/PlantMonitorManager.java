@@ -5,8 +5,10 @@ import java.util.Arrays;
 import javax.annotation.Resource;
 
 import org.aalku.plantMonitor.manager.repository.ConfigRepository;
+import org.aalku.plantMonitor.manager.vo.PersistedConfiguration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.stereotype.Controller;
@@ -18,15 +20,17 @@ import jssc.SerialPortList;
 
 @Controller
 @SpringBootApplication
-public class PlantMonitorManager {
+public class PlantMonitorManager implements InitializingBean {
 
-	Logger log = LogManager.getLogger(PlantMonitorManager.class);
+	private Logger log = LogManager.getLogger(PlantMonitorManager.class);
 
 	@Resource
-	PortManager port;
+	private PortManager port;
 	
 	@Resource
-	ConfigRepository config;
+	private ConfigRepository configRepo;
+	
+	private PersistedConfiguration config;
 
 	@RequestMapping("/")
 	@ResponseBody
@@ -42,6 +46,8 @@ public class PlantMonitorManager {
 			if (!portName.equals(port.getPortName())) {
 				if (port.testPort(portName)) {
 					port.setPortName(portName);
+					config.setPortName(portName);
+					configRepo.save(config);
 					return "Port changed: " + portName;
 				} else {
 					return "Can't open port: " + portName;
@@ -56,6 +62,21 @@ public class PlantMonitorManager {
 	
 	public static void main(String[] args) throws Exception {
 		SpringApplication.run(PlantMonitorManager.class, args);
+	}
+
+
+	@Override
+	public void afterPropertiesSet() throws Exception {
+		config = configRepo.load().orElseGet(()->{
+			PersistedConfiguration cfg = new PersistedConfiguration();
+			cfg.setId(0L);
+			return cfg;
+		});
+		String portName = config.getPortName();
+		if (portName != null && !portName.trim().isEmpty()) {
+			this.connect(portName);
+		}
+		configRepo.save(config);
 	}
 
 }
