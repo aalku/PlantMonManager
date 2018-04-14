@@ -1,6 +1,7 @@
 package org.aalku.plantMonitor.manager;
 
 import java.util.Arrays;
+import java.util.List;
 
 import javax.annotation.Resource;
 
@@ -32,15 +33,20 @@ public class PlantMonitorManager implements InitializingBean {
 	
 	private PersistedConfiguration config;
 
-	@RequestMapping("/")
+	@RequestMapping("/serialPorts")
 	@ResponseBody
-	String home() {
-		return "Serial port names: " + Arrays.asList(SerialPortList.getPortNames());
+	List<String> serialPorts() {
+		return Arrays.asList(SerialPortList.getPortNames());
 	}
 
+	@RequestMapping("/currentSerialPort")
+	@ResponseBody
+	String currentPort() {
+		return port == null ? null : port.getPortName();
+	}
 
 	@ResponseBody
-	@RequestMapping("/connect")
+	@RequestMapping("/connectSerialPort")
 	public String connect(@RequestParam("portName") String portName) {
 		try {
 			if (!portName.equals(port.getPortName())) {
