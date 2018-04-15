@@ -2,11 +2,14 @@ package org.aalku.plantMonitor.manager;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.Resource;
 
 import org.aalku.plantMonitor.manager.repository.ConfigRepository;
 import org.aalku.plantMonitor.manager.vo.PersistedConfiguration;
+import org.aalku.plantMonitor.manager.vo.PlantData;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
@@ -30,6 +33,9 @@ public class PlantMonitorManager implements InitializingBean {
 	
 	@Resource
 	private ConfigRepository configRepo;
+	
+	@Resource
+	private PlantDataService plantDataService;
 	
 	private PersistedConfiguration config;
 
@@ -85,6 +91,30 @@ public class PlantMonitorManager implements InitializingBean {
 		port.setScanSuccessHandler((pn) -> {
 			config.setPortName(pn);
 			configRepo.save(config);
+		});
+		// Received: 25, AD50;35;3.30;5.18;611;52
+		Pattern pattern = Pattern.compile("^Received: ([0-9]+), ([0-9A-F]+);([0-9A-F]+);([0-9.]+);([0-9.]+);([0-9]+);([0-9]+)$");
+		port.setDataHandler(line->{
+			Matcher m;
+			if ((m = pattern.matcher(line)).matches()) {
+				int repLength = Integer.parseInt(m.group(1));
+				int meaLength = m.end(0) - m.start(2);
+				if (repLength == meaLength && repLength == 32 || repLength == meaLength + 1 && repLength <= 32) {
+					PlantData d = new PlantData();
+					d.setVcc(Float.parseFloat(m.group(4)));
+					d.setVbat(Float.parseFloat(m.group(5)));
+					d.setSense(Integer.parseInt(m.group(6)));
+					String addr = m.group(2);
+					String seq = m.group(3);
+					Integer perc = Integer.valueOf(m.group(7));
+					log.info("Received: addr={}, seq={}, data={}, eperc={}", addr, seq, d, perc);
+					plantDataService.store(addr, d);
+				} else {
+					log.warn("Cropped message: {}", line);
+				}
+			} else {
+				log.warn("Noise: {}", line);
+			}
 		});
 		port.start();
 	}

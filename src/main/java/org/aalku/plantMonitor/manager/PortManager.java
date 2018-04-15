@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -41,9 +42,11 @@ class PortManager extends Thread implements Closeable {
 	private final AtomicBoolean connected = new AtomicBoolean(false);
 	private final AtomicBoolean connecting = new AtomicBoolean(false);
 
-	private Consumer<String> scanSuccessHandler;
+	private Optional<Consumer<String>> scanSuccessHandler = Optional.empty();
 
 	private boolean allowScan;
+
+	private Optional<Consumer<String>> dataHandler = Optional.empty();
 
 	@Override
 	public void run() {
@@ -52,7 +55,8 @@ class PortManager extends Thread implements Closeable {
 			if (isConnected()) {
 				String read = readLine(0L, null);
 				if (read != null) {
-					log.info("Received {}", read);
+					log.debug("Received {}", read);
+					dataHandler.ifPresent(h->h.accept(read));
 				}
 			} else {
 				delay();
@@ -69,7 +73,10 @@ class PortManager extends Thread implements Closeable {
 	}
 
 	private String readLine(long timeout, TimeUnit timeUnit) {
+		SerialPort _port = this.port;
 		if (!isConnected() && !isConnecting()) {
+			return null;
+		} else if (_port == null) {
 			return null;
 		}
 		boolean blocking = timeout > 0L;
@@ -78,12 +85,13 @@ class PortManager extends Thread implements Closeable {
 		while (true) {
 			try {
 				String read;
-				while (null != (read = port.readString())) {
+				while (null != (read = _port.readString())) {
 					partialLine.append(read);
 				}
 			} catch (SerialPortException e) {
 				internalDisconnect();
 				e.printStackTrace();
+				return null;
 			}
 			IntSupplier findLf = ()->{
 				int ir = partialLine.indexOf("\r");
@@ -136,7 +144,7 @@ class PortManager extends Thread implements Closeable {
 			for (String port: ports) {
 				tryPort.accept(port);
 				if (isConnected()) {
-					scanSuccessHandler.accept(port);
+					scanSuccessHandler.ifPresent(h->h.accept(port));
 					break;
 				}
 			}
@@ -165,7 +173,7 @@ class PortManager extends Thread implements Closeable {
 	}
 	
 	private boolean connectRX(String portName) {
-		log.info("Connecting to RX at {} ...", portName);
+		log.debug("Connecting to RX at {} ...", portName);
 		internalDisconnect();
 		partialLine.setLength(0);
 		port = new SerialPort(portName);		
@@ -233,12 +241,16 @@ class PortManager extends Thread implements Closeable {
 	}
 
 	public void setScanSuccessHandler(Consumer<String> handler) {
-		this.scanSuccessHandler = handler;
+		this.scanSuccessHandler = Optional.ofNullable(handler);
 	}
 
 	public void setAllowScan(boolean allowScan) {
 		this.allowScan = allowScan;
 		
+	}
+
+	public void setDataHandler(Consumer<String> handler) {
+		this.dataHandler = Optional.ofNullable(handler);
 	}
 
 }
