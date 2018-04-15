@@ -1,5 +1,7 @@
 package org.aalku.plantMonitor.manager;
 
+import java.util.concurrent.TimeUnit;
+
 import javax.annotation.Resource;
 
 import org.aalku.plantMonitor.manager.vo.PlantData;
@@ -15,14 +17,17 @@ public class PlantDataService implements InitializingBean {
 	private InfluxDBTemplate<Point> influxDBTemplate;
 
 	public void store(String addr, PlantData d) {
-//		final Point p = Point.measurement("disk").time(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-//				.tag("tag", "value").addField("1field", 0L).addField("field2", 1L).build();
-//		influxDBTemplate.write(p);
+		final Point dataPoint = Point.measurement("moisture").time(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+				.tag("addr", addr).addField("sense", d.getSense()).build();
+		final Point metaPoint = Point.measurement("meta").time(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+				.tag("addr", addr).addField("vcc", d.getVcc()).addField("vbat", d.getVbat()).build();
+		influxDBTemplate.write(dataPoint);
+		influxDBTemplate.write(metaPoint);
 	}
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
-		influxDBTemplate.createDatabase();
+		// influxDBTemplate.createDatabase();
 	}
 
 }
