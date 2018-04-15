@@ -51,15 +51,19 @@ class PortManager extends Thread implements Closeable {
 	@Override
 	public void run() {
 		while (!this.isInterrupted()) {
-			handleConnect();
-			if (isConnected()) {
-				String read = readLine(0L, null);
-				if (read != null) {
-					log.debug("Received {}", read);
-					dataHandler.ifPresent(h->h.accept(read));
+			try {
+				handleConnect();
+				if (isConnected()) {
+					String read = readLine(0L, null);
+					if (read != null) {
+						log.debug("Received {}", read);
+						dataHandler.ifPresent(h->h.accept(read));
+					}
+				} else {
+					delay();
 				}
-			} else {
-				delay();
+			} catch (Exception e) {
+				log.error("Error: {}", e, e);
 			}
 		}
 	}
@@ -90,7 +94,7 @@ class PortManager extends Thread implements Closeable {
 				}
 			} catch (SerialPortException e) {
 				internalDisconnect();
-				e.printStackTrace();
+				log.error("Error: {}", e, e);
 				return null;
 			}
 			IntSupplier findLf = ()->{
@@ -191,7 +195,7 @@ class PortManager extends Thread implements Closeable {
 			}
 			return ok;
 		} catch (SerialPortException e1) {
-			e1.printStackTrace();
+			log.error("Error: {}", e1, e1);
 		} finally {
 			if (!isConnected()) {
 				internalDisconnect();
