@@ -1,8 +1,8 @@
 {
   "__inputs": [
     {
-      "name": "DS_INFLUXDB_LOCAL",
-      "label": "influxdb local",
+      "name": "DS_INFLUX_DB LOCAL",
+      "label": "influx db local",
       "description": "",
       "type": "datasource",
       "pluginId": "influxdb",
@@ -62,12 +62,12 @@
   "panels": [
     {
       "columns": [],
-      "datasource": "${DS_INFLUXDB_LOCAL}",
+      "datasource": "${DS_INFLUX_DB LOCAL}",
       "description": "",
       "fontSize": "100%",
       "gridPos": {
         "h": 5,
-        "w": 24,
+        "w": 18,
         "x": 0,
         "y": 0
       },
@@ -393,12 +393,30 @@
       "type": "table"
     },
     {
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 2,
+      "limit": 10,
+      "links": [],
+      "onlyAlertsOnDashboard": true,
+      "show": "current",
+      "sortOrder": 3,
+      "stateFilter": [],
+      "title": "Alerts",
+      "transparent": true,
+      "type": "alertlist"
+    },
+    {
       "alert": {
         "conditions": [
           {
             "evaluator": {
               "params": [
-                47
+                40
               ],
               "type": "lt"
             },
@@ -408,13 +426,13 @@
             "query": {
               "params": [
                 "A",
-                "5m",
+                "15m",
                 "now"
               ]
             },
             "reducer": {
               "params": [],
-              "type": "avg"
+              "type": "max"
             },
             "type": "query"
           }
@@ -435,8 +453,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_INFLUXDB_LOCAL}",
-      "decimals": 0,
+      "datasource": "${DS_INFLUX_DB LOCAL}",
+      "decimals": 2,
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -458,7 +476,7 @@
         "values": true
       },
       "lines": true,
-      "linewidth": 1,
+      "linewidth": 2,
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
@@ -522,7 +540,7 @@
           "fill": true,
           "line": true,
           "op": "lt",
-          "value": 47
+          "value": 40
         }
       ],
       "timeFrom": null,
@@ -543,9 +561,9 @@
       },
       "yaxes": [
         {
-          "decimals": null,
+          "decimals": 2,
           "format": "percent",
-          "label": null,
+          "label": "%",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -557,7 +575,7 @@
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true
+          "show": false
         }
       ]
     },
@@ -577,13 +595,13 @@
             "query": {
               "params": [
                 "A",
-                "5m",
+                "15m",
                 "now"
               ]
             },
             "reducer": {
               "params": [],
-              "type": "avg"
+              "type": "min"
             },
             "type": "query"
           }
@@ -591,6 +609,7 @@
         "executionErrorState": "alerting",
         "frequency": "60s",
         "handler": 1,
+        "message": "Battery low",
         "name": "Battery alert",
         "noDataState": "no_data",
         "notifications": []
@@ -599,11 +618,11 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_INFLUXDB_LOCAL}",
+      "datasource": "${DS_INFLUX_DB LOCAL}",
       "decimals": 2,
       "fill": 1,
       "gridPos": {
-        "h": 4,
+        "h": 5,
         "w": 24,
         "x": 0,
         "y": 10
@@ -722,26 +741,9 @@
           "show": false
         }
       ]
-    },
-    {
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 14
-      },
-      "id": 2,
-      "limit": 10,
-      "links": [],
-      "onlyAlertsOnDashboard": false,
-      "show": "current",
-      "sortOrder": 1,
-      "stateFilter": [],
-      "title": "Alerts",
-      "type": "alertlist"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
@@ -749,7 +751,7 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-12h",
     "to": "now"
   },
   "timepicker": {
@@ -780,5 +782,5 @@
   "timezone": "",
   "title": "PlantMonitor",
   "uid": "_CXfWSZmz",
-  "version": 12
+  "version": 3
 }
