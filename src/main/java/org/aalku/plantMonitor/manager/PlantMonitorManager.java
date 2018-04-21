@@ -1,7 +1,9 @@
 package org.aalku.plantMonitor.manager;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -10,6 +12,7 @@ import javax.annotation.Resource;
 import org.aalku.plantMonitor.manager.repository.ConfigRepository;
 import org.aalku.plantMonitor.manager.vo.PersistedConfiguration;
 import org.aalku.plantMonitor.manager.vo.PlantData;
+import org.aalku.plantMonitor.manager.weather.WeatherManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
@@ -37,6 +40,9 @@ public class PlantMonitorManager implements InitializingBean {
 	@Resource
 	private PlantDataService plantDataService;
 	
+	@Resource
+	private WeatherManager weatherService;
+	
 	private PersistedConfiguration config;
 
 	@RequestMapping("/serialPorts")
@@ -49,6 +55,33 @@ public class PlantMonitorManager implements InitializingBean {
 	@ResponseBody
 	String currentPort() {
 		return port == null ? null : port.getPortName();
+	}
+	
+	@ResponseBody
+	@RequestMapping("/temperature")
+	public Map<String, Object> temperature() {
+		Map<String, Object> res = new LinkedHashMap<>();
+		res.put("temp", weatherService.getWeather().getTemp());
+		res.put("unit", "C");
+		return res;
+	}
+
+	@ResponseBody
+	@RequestMapping("/pressure")
+	public Map<String, Object> pressure() {
+		Map<String, Object> res = new LinkedHashMap<>();
+		res.put("pressure", weatherService.getWeather().getPressure());
+		res.put("unit", "Pa");
+		return res;
+	}
+
+	@ResponseBody
+	@RequestMapping("/humidity")
+	public Map<String, Object> humidity() {
+		Map<String, Object> res = new LinkedHashMap<>();
+		res.put("pressure", weatherService.getWeather().getHumidity());
+		res.put("unit", "%");
+		return res;
 	}
 
 	@ResponseBody
@@ -69,6 +102,7 @@ public class PlantMonitorManager implements InitializingBean {
 	}
 	
 	public static void main(String[] args) throws Exception {
+		System.setProperty("spring.config.additional-location", "classpath:secrets.properties");
 		SpringApplication.run(PlantMonitorManager.class, args);
 	}
 
