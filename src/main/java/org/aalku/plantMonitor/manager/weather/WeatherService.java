@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import org.aalku.plantMonitor.manager.vo.WeatherData;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
@@ -18,46 +19,96 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import reactor.core.publisher.Mono;
 
 @Component
-public class WeatherManager implements InitializingBean {
+public class WeatherService implements InitializingBean {
 
-	private static Logger log = LogManager.getLogger(WeatherManager.class);
+	public interface Place {
+		String getName();
+		String getCountry();
+		float getLon();
+		float getLat();
+	}
 
-	public static class Weather {
+	private static Logger log = LogManager.getLogger(WeatherService.class);
+
+	public static class WeatherImplOWM implements WeatherData {
 		public static class Main {
-			private float temp;
-			private float pressure;
-			private float humidity;
-			public float getTemp() {
-				return temp;
-			}
+			float temp;
+			float pressure;
+			float humidity;
 			public void setTemp(float temp) {
 				this.temp = temp;
 			}
-			public float getPressure() {
-				return pressure;
-			}
 			public void setPressure(float pressure) {
 				this.pressure = pressure;
-			}
-			public float getHumidity() {
-				return humidity;
 			}
 			public void setHumidity(float humidity) {
 				this.humidity = humidity;
 			}
 		}
+		public static class Coord {
+			float lon;
+			float lat;
+			public void setLon(float lon) {
+				this.lon = lon;
+			}
+			public void setLat(float lat) {
+				this.lat = lat;
+			}
+		}
+		public static class Sys {
+			String country;
+			public void setCountry(String country) {
+				this.country = country;
+			}
+		}
 		private Main main;
+		private String name;
+		private Coord coord;
+		private Sys sys;
+		@Override
 		public float getTemp() {
 			return main.temp;
 		}
 		public void setMain(Main main) {
 			this.main = main;
 		}
-		public float getPressure() {
-			return main.getPressure();
+		public void setName(String name) {
+			this.name = name;
 		}
+		public void setCoord(Coord coord) {
+			this.coord = coord;
+		}
+		public void setSys(Sys sys) {
+			this.sys = sys;
+		}
+		@Override
+		public float getPressure() {
+			return main.pressure;
+		}
+		@Override
 		public float getHumidity() {
-			return main.getHumidity();
+			return main.humidity;
+		}
+		@Override
+		public Place getPlace() {
+			return new Place() {
+				@Override
+				public String getName() {
+					return name;
+				}
+				@Override
+				public String getCountry() {
+					return sys.country;
+				}
+				@Override
+				public float getLon() {
+					return coord.lon;
+				}
+				@Override
+				public float getLat() {
+					return coord.lat;
+				}
+			};
 		}
 	}
 
@@ -67,28 +118,25 @@ public class WeatherManager implements InitializingBean {
 	@Value("${api.openweathermap.org.key}")
 	private String appid;
 
-	@Value("${api.openweathermap.org.city}")
-	private String city;
-
 	private WebClient client;
 
-	private AsyncCacheLoader<String, Weather> loader = (city, e) -> {
-		Mono<Weather> weather = client.get()
+	private AsyncCacheLoader<String, WeatherImplOWM> loader = (city, e) -> {
+		Mono<WeatherImplOWM> weather = client.get()
 				.uri(builder -> {
 					URI uri = builder.pathSegment("weather").queryParam("appid", appid).queryParam("units", "metric").queryParam("q", city).build();
 					log.debug("Requestting: {}", uri);
 					return uri;
 				})
-				.retrieve().bodyToMono(Weather.class);
+				.retrieve().bodyToMono(WeatherImplOWM.class);
 		return weather.toFuture();
 	};
 
-	private AsyncLoadingCache<String, Weather> weatherCache = Caffeine.newBuilder()
+	private AsyncLoadingCache<String, WeatherImplOWM> weatherCache = Caffeine.newBuilder()
 			.expireAfterWrite(2, TimeUnit.MINUTES).buildAsync(loader);
 
-	public Weather getWeather() {
+	public WeatherData getWeather(String place) {
 		try {
-			Weather res = weatherCache.get(city).get();
+			WeatherData res = weatherCache.get(place).get();
 			return res;
 		} catch (InterruptedException e) {
 			throw new RuntimeException(e);
