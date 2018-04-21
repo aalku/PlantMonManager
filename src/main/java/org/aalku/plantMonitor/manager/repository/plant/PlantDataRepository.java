@@ -1,4 +1,4 @@
-package org.aalku.plantMonitor.manager;
+package org.aalku.plantMonitor.manager.repository.plant;
 
 import java.util.concurrent.TimeUnit;
 
@@ -6,12 +6,11 @@ import javax.annotation.Resource;
 
 import org.aalku.plantMonitor.manager.vo.PlantData;
 import org.influxdb.dto.Point;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.data.influxdb.InfluxDBTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-public class PlantDataService implements InitializingBean {
+public class PlantDataRepository {
 
 	@Resource
 	private InfluxDBTemplate<Point> influxDBTemplate;
@@ -23,11 +22,6 @@ public class PlantDataService implements InitializingBean {
 				.tag("addr", addr).addField("vcc", d.getVcc()).addField("vbat", d.getVbat()).build();
 		influxDBTemplate.write(dataPoint);
 		influxDBTemplate.write(metaPoint);
-	}
-
-	@Override
-	public void afterPropertiesSet() throws Exception {
-		// influxDBTemplate.createDatabase();
 	}
 
 }

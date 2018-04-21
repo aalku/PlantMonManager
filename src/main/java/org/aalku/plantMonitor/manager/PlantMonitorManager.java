@@ -10,14 +10,17 @@ import java.util.regex.Pattern;
 import javax.annotation.Resource;
 
 import org.aalku.plantMonitor.manager.repository.ConfigRepository;
+import org.aalku.plantMonitor.manager.repository.plant.PlantDataRepository;
 import org.aalku.plantMonitor.manager.vo.PersistedConfiguration;
 import org.aalku.plantMonitor.manager.vo.PlantData;
-import org.aalku.plantMonitor.manager.weather.WeatherManager;
+import org.aalku.plantMonitor.manager.weather.WeatherService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,6 +30,7 @@ import jssc.SerialPortList;
 
 @Controller
 @SpringBootApplication
+@EnableScheduling
 public class PlantMonitorManager implements InitializingBean {
 
 	private static Logger log = LogManager.getLogger(PlantMonitorManager.class);
@@ -38,12 +42,15 @@ public class PlantMonitorManager implements InitializingBean {
 	private ConfigRepository configRepo;
 	
 	@Resource
-	private PlantDataService plantDataService;
+	private PlantDataRepository plantDataService;
 	
 	@Resource
-	private WeatherManager weatherService;
+	private WeatherService weatherService;
 	
 	private PersistedConfiguration config;
+	
+	@Value("${api.openweathermap.org.place}")
+	private String place;
 
 	@RequestMapping("/serialPorts")
 	@ResponseBody
@@ -61,7 +68,7 @@ public class PlantMonitorManager implements InitializingBean {
 	@RequestMapping("/temperature")
 	public Map<String, Object> temperature() {
 		Map<String, Object> res = new LinkedHashMap<>();
-		res.put("temp", weatherService.getWeather().getTemp());
+		res.put("temp", weatherService.getWeather(place).getTemp());
 		res.put("unit", "C");
 		return res;
 	}
@@ -70,7 +77,7 @@ public class PlantMonitorManager implements InitializingBean {
 	@RequestMapping("/pressure")
 	public Map<String, Object> pressure() {
 		Map<String, Object> res = new LinkedHashMap<>();
-		res.put("pressure", weatherService.getWeather().getPressure());
+		res.put("pressure", weatherService.getWeather(place).getPressure());
 		res.put("unit", "Pa");
 		return res;
 	}
@@ -79,7 +86,7 @@ public class PlantMonitorManager implements InitializingBean {
 	@RequestMapping("/humidity")
 	public Map<String, Object> humidity() {
 		Map<String, Object> res = new LinkedHashMap<>();
-		res.put("pressure", weatherService.getWeather().getHumidity());
+		res.put("pressure", weatherService.getWeather(place).getHumidity());
 		res.put("unit", "%");
 		return res;
 	}
