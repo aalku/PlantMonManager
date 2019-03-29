@@ -72,7 +72,13 @@ class PortManager extends Thread implements Closeable {
 				} else {
 					long timeNoDataMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastDataNano);
 					long timeLastConnectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastConnectNano);
-					if (timeNoDataMillis > reconnectIfNoDataForMillis || timeLastConnectMillis > reconnectEveryMillis) {
+					boolean isReconnectTime = timeLastConnectMillis > reconnectEveryMillis;
+					boolean noDataForTooLong = timeNoDataMillis > reconnectIfNoDataForMillis;
+					if (noDataForTooLong) {
+						log.info("No data for too long. Reconnecting...");
+						reconnect.set(true);
+					} else if (isReconnectTime) {
+						log.info("We reconnect from time to time and not it is the time. Reconnecting...");
 						reconnect.set(true);
 					}
 					delay();
