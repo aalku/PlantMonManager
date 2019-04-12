@@ -47,6 +47,15 @@ class PortManager extends Thread implements Closeable {
 	private boolean allowScan;
 
 	private Optional<Consumer<String>> dataHandler = Optional.empty();
+	
+	
+	private long reconnectEveryMillis = TimeUnit.HOURS.toMillis(7);
+
+	private long reconnectIfNoDataForMillis = TimeUnit.HOURS.toMillis(1);
+	
+	private long lastConnectNano = System.nanoTime();
+
+	private long lastDataNano = System.nanoTime();
 
 	@Override
 	public void run() {
@@ -56,10 +65,22 @@ class PortManager extends Thread implements Closeable {
 				if (isConnected()) {
 					String read = readLine(0L, null);
 					if (read != null) {
+						lastDataNano = System.nanoTime();
 						log.debug("Received {}", read);
 						dataHandler.ifPresent(h->h.accept(read));
 					}
 				} else {
+					long timeNoDataMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastDataNano);
+					long timeLastConnectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastConnectNano);
+					boolean isReconnectTime = timeLastConnectMillis > reconnectEveryMillis;
+					boolean noDataForTooLong = timeNoDataMillis > reconnectIfNoDataForMillis;
+					if (noDataForTooLong) {
+						log.info("No data for too long. Reconnecting...");
+						reconnect.set(true);
+					} else if (isReconnectTime) {
+						log.info("We reconnect from time to time and not it is the time. Reconnecting...");
+						reconnect.set(true);
+					}
 					delay();
 				}
 			} catch (Exception e) {
@@ -179,6 +200,7 @@ class PortManager extends Thread implements Closeable {
 	private boolean connectRX(String portName) {
 		log.debug("Connecting to RX at {} ...", portName);
 		internalDisconnect();
+		lastConnectNano = System.nanoTime();
 		partialLine.setLength(0);
 		port = new SerialPort(portName);		
 		boolean ok = false;
@@ -255,6 +277,22 @@ class PortManager extends Thread implements Closeable {
 
 	public void setDataHandler(Consumer<String> handler) {
 		this.dataHandler = Optional.ofNullable(handler);
+	}
+
+	public long getReconnectEveryMillis() {
+		return reconnectEveryMillis;
+	}
+
+	public void setReconnectEveryMillis(long reconnectEveryMillis) {
+		this.reconnectEveryMillis = reconnectEveryMillis;
+	}
+
+	public long getReconnectIfNoDataForMillis() {
+		return reconnectIfNoDataForMillis;
+	}
+
+	public void setReconnectIfNoDataForMillis(long reconnectIfNoDataForMillis) {
+		this.reconnectIfNoDataForMillis = reconnectIfNoDataForMillis;
 	}
 
 }
