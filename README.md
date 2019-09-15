@@ -52,7 +52,7 @@ $ echo "deb https://packagecloud.io/grafana/stable/debian/ stretch main" | sudo 
 
 - Configure grafana:
 
-	Go to http://192.168.1.230:3000/
+	Go to http://yourIpAddress:3000/
   
 	Create influxdb datasource:
 	```
