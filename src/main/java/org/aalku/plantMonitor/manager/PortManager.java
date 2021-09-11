@@ -150,14 +150,18 @@ class PortManager extends Thread implements Closeable {
 
 	private void handleConnect() {
 		Consumer<String> tryPort = (_portName) -> {
-			if (!isConnected()) {
-				reconnect.set(true);
-			}
-			if (_portName != null && reconnect.getAndSet(false)) {
-				internalDisconnect();
-				if (connectRX(_portName)) {
-					this.portName = _portName;
+			try {
+				if (!isConnected()) {
+					reconnect.set(true);
 				}
+				if (_portName != null && reconnect.getAndSet(false)) {
+					internalDisconnect();
+					if (connectRX(_portName)) {
+						this.portName = _portName;
+					}
+				}
+			} catch (Exception e) {
+				log.warn("Could not connect to serial port {}", _portName, e);
 			}
 		};
 		if (portName != null && !portName.isEmpty()) {
