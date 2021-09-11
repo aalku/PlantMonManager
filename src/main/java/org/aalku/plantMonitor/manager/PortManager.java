@@ -68,20 +68,20 @@ class PortManager extends Thread implements Closeable {
 						lastDataNano = System.nanoTime();
 						log.debug("Received {}", read);
 						dataHandler.ifPresent(h->h.accept(read));
+					} else {
+						long timeNoDataMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastDataNano);
+						long timeLastConnectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastConnectNano);
+						boolean isReconnectTime = timeLastConnectMillis > reconnectEveryMillis;
+						boolean noDataForTooLong = timeNoDataMillis > reconnectIfNoDataForMillis;
+						if (noDataForTooLong) {
+							log.info("No data for too long. Reconnecting...");
+							reconnect.set(true);
+						} else if (isReconnectTime) {
+							log.info("We reconnect from time to time and not it is the time. Reconnecting...");
+							reconnect.set(true);
+						}
+						delay();
 					}
-				} else {
-					long timeNoDataMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastDataNano);
-					long timeLastConnectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastConnectNano);
-					boolean isReconnectTime = timeLastConnectMillis > reconnectEveryMillis;
-					boolean noDataForTooLong = timeNoDataMillis > reconnectIfNoDataForMillis;
-					if (noDataForTooLong) {
-						log.info("No data for too long. Reconnecting...");
-						reconnect.set(true);
-					} else if (isReconnectTime) {
-						log.info("We reconnect from time to time and not it is the time. Reconnecting...");
-						reconnect.set(true);
-					}
-					delay();
 				}
 			} catch (Exception e) {
 				log.error("Error: {}", e, e);
@@ -108,37 +108,49 @@ class PortManager extends Thread implements Closeable {
 		Instant timeoutInstant = blocking ? Instant.now().plus(timeUnit.toNanos(timeout), ChronoUnit.NANOS) : null;
 		String res = null;
 		while (true) {
+			boolean something = false;
 			try {
 				String read;
 				while (null != (read = _port.readString())) {
 					partialLine.append(read);
+					something = read.length() > 0;
 				}
 			} catch (SerialPortException e) {
 				internalDisconnect();
 				log.error("Error: {}", e, e);
 				return null;
 			}
-			IntSupplier findLf = ()->{
-				int ir = partialLine.indexOf("\r");
-				int in = partialLine.indexOf("\n");
-				int i = in;
-				if ((ir >= 0) && (in < 0 || ir < in)) {
-					i = ir;
-				}
-				return i;
-			};
-			
-			int i;
-			while (0 <= (i = findLf.getAsInt())) {
-				if (i == 0) {
-					partialLine.deleteCharAt(0);
-				} else {
-					res = partialLine.substring(0, i);
-					partialLine.delete(0, i + 1);
+			if (something) {
+				IntSupplier findLf = ()->{
+					int ir = partialLine.indexOf("\r");
+					int in = partialLine.indexOf("\n");
+					int i = in;
+					if ((ir >= 0) && (in < 0 || ir < in)) {
+						i = ir;
+					}
+					return i;
+				};
+				
+				int i;
+				while (0 <= (i = findLf.getAsInt())) {
+					if (i == 0) {
+						partialLine.deleteCharAt(0);
+					} else {
+						res = partialLine.substring(0, i);
+						partialLine.delete(0, i + 1);
+					}
 				}
 			}
 			if (res != null || !blocking || Instant.now().isAfter(timeoutInstant)) {
 				break;
+			}
+			if (!something) {
+				try {
+					Thread.sleep(5);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
+				}
 			}
 		}
 		return res;
