@@ -2,3 +2,5 @@ target
 .settings
 .classpath
 .project
+hs_err_pid*.log
+database.mv.db
